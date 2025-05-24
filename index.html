@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>カスタムキーボード</title>
+    <script src="style.js" defer></script>
+    <script src="expression_parser.js" defer></script>
+    <script src="./piano.js" type="text/javascript"></script> <!-- defer を削除 -->
+    <script src="main.js" defer></script>
+</head>
+<body>
+    <h1>カスタムキーボード</h1>
+
+    <div id="keyboard-display">
+        <!-- キーボード表示エリア -->
+    </div>
+
+    <div id="sound-assignment">
+        <h2 id="assignment-label">音程マップ</h2>
+        <textarea id="assignment-textarea" rows="15" cols="80" placeholder="例:&#10;a=440&#10;s=a*3/2&#10;d=(s)^2"></textarea>
+    </div>
+
+    <div id="settings">
+        <h2>設定</h2>
+        <div>
+            <label for="base-frequency">基準音:</label>
+            <input type="text" id="base-frequency" value="440"> Hz
+        </div>
+        <div>
+            <label for="oscillator-type">音色:</label>
+            <select id="oscillator-type">
+                <option value="sine">sin</option>
+                <option value="piano">piano</option>
+            </select>
+            <label for="master-volume" style="margin-left: 10px;">音量:</label>
+            <input type="range" id="master-volume" min="0" max="1" value="0.5" step="0.01">
+            <span id="volume-display" style="margin-left: 5px;">50%</span>
+        </div>
+        <div>
+            <label for="tuning-preset">音律プリセット:</label>
+            <select id="tuning-preset">
+                <option value="12tet">12平均律</option>
+                <option value="just">純正律</option>
+                <option value="pythagorean">ピタゴラス音律</option>
+                <option value="meantone">ミーントーン (1/4コンマ)</option>
+                <option value="31tet">31平均律</option>
+                <option value="53tet">53平均律</option>
+                <option value="bp">ボーレン・ピアース音律</option>
+            </select>
+        </div>
+    </div>
+
+    <hr>
+    <footer>
+        <p><strong>カスタムキーボード v1.0</strong></p>
+        <p>Product by koteitan</p>
+        <p>Programmed by Cline + Gemini 1.5 Pro</p>
+        <p><a href="https://github.com/koteitan/koteitan.github.io/tree/main/keyboard/" target="_blank">Source code on GitHub</a></p>
+        <p>Piano sound from Musyng Kite soundfont, provided by <a href="https://github.com/gleitz/midi-js-soundfonts" target="_blank">gleitz/midi-js-soundfonts</a>, licensed under <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank">CC BY-SA 3.0</a>.</p>
+    </footer>
+</body>
+</html>
