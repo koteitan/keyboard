@@ -18,7 +18,10 @@
 
     <div id="sound-assignment">
         <h2 id="assignment-label">音程マップ</h2>
-        <textarea id="assignment-textarea" rows="15" cols="80" placeholder="例:&#10;a=440&#10;s=a*3/2&#10;d=(s)^2"></textarea>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+            <textarea id="assignment-textarea" rows="15" style="flex: 1 1 300px;" placeholder="例:&#10;a=1&#10;s=a*3/2&#10;d=(2)^(7/12)"></textarea>
+            <textarea id="ratio-display-textarea" rows="15" style="flex: 1 1 200px;" readonly placeholder="評価された比率/周波数"></textarea>
+        </div>
     </div>
 
     <div id="settings">
@@ -48,6 +51,9 @@
                 <option value="53tet">53平均律</option>
                 <option value="bp">ボーレン・ピアース音律</option>
             </select>
+        </div>
+        <div>
+            <button id="sort-assignments-button">音程ソート (比率昇順)</button>
         </div>
     </div>
 

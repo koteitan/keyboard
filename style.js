@@ -121,15 +121,28 @@ document.addEventListener('DOMContentLoaded', () => {
             font-family: monospace; /* 個別のinputがあった場合のため */
         }
 
-        #assignment-textarea {
-            width: 90%; /* PCでは少し余裕を持たせる */
-            max-width: 600px; /* あまり広がりすぎないように */
-            min-height: 150px; /* 最低限の高さを確保 */
-            font-family: monospace; /* テキストエリアも等幅に */
-            font-size: 1em;
-            padding: 5px;
+        #sound-assignment > div { /* テキストエリアを囲むdiv */
+            display: flex;
+            flex-wrap: wrap; /* 画面が狭い場合は折り返す */
+            gap: 10px; /* テキストエリア間の隙間 */
+        }
+
+        #assignment-textarea, #ratio-display-textarea {
+            flex: 1 1 250px; /* 基本幅250pxで伸縮、折り返し可能に */
+            min-height: 200px; /* 高さを少し増やす */
+            font-family: monospace; 
+            font-size: 0.9em; /* 少しフォントサイズを小さく */
+            padding: 8px;
             border: 1px solid #ccc;
-            box-sizing: border-box; /* paddingとborderをwidthに含める */
+            box-sizing: border-box;
+            white-space: pre; /* 改行とスペースをそのまま表示 (特に表示エリア) */
+            overflow-wrap: break-word; /* 長い行も折り返す */
+        }
+
+        #ratio-display-textarea {
+            background-color: #f9f9f9; /* 読み取り専用なので少し背景色を変える */
+            color: #333;
+            border-left: 2px solid #ddd; /* 左側に区切り線 */
         }
         
         #sound-assignment .fraction-separator {
