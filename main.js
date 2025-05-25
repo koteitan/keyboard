@@ -94,7 +94,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const keyElements = {};
     let parsedAssignments = {}; 
     let evaluatedAssignments = {}; 
-    let lineStructure = []; // { type: 'assignment'/'expression'/'comment'/'empty'/'invalid', key?, expression?, originalLine, isAnonymous? }
 
     keysLayout.forEach((row, rowIndex) => {
         const rowDiv = document.createElement('div');
@@ -159,43 +158,31 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateAssignmentsFromTextArea() {
         parsedAssignments = {};
         evaluatedAssignments = {}; 
-        lineStructure = []; 
         if (!assignmentTextArea) return;
         const lines = assignmentTextArea.value.split('\n');
-        
-        lines.forEach((originalLine, index) => {
-            const line = originalLine.trim();
-            let lineObj = { originalLine }; 
+        lines.forEach(line => {
+            line = line.trim();
+            if (line === '' || line.startsWith('#')) return; // 行頭の#はコメントとして無視
+            
+            // 行の途中からのコメントも処理
+            const commentIndex = line.indexOf('#');
+            let effectiveLine = line;
+            if (commentIndex !== -1) {
+                effectiveLine = line.substring(0, commentIndex).trim();
+            }
+            if (effectiveLine === '') return; // コメント除去後に空になった場合
 
-            if (line === '') {
-                lineObj.type = 'empty';
-            } else if (line.startsWith('#')) {
-                lineObj.type = 'comment';
-            } else {
-                const parts = line.split('=');
-                if (parts.length >= 2) { 
-                    const key = parts[0].trim();
-                    const expression = parts.slice(1).join('=').trim();
-                    if (key && expression) {
-                        parsedAssignments[key] = expression;
-                        lineObj = {...lineObj, type: 'assignment', key, expression, isAnonymous: false };
-                    } else { 
-                        lineObj.type = 'invalid';
-                    }
-                } else if (parts.length === 1 && line !== '') { 
-                    const expression = line.trim();
-                    if (expression) {
-                        const internalKey = `_anon_${index}_`; 
-                        parsedAssignments[internalKey] = expression;
-                        lineObj = {...lineObj, type: 'expression', key: internalKey, expression, isAnonymous: true };
-                    } else { 
-                         lineObj.type = 'empty';
-                    }
-                } else { 
-                    lineObj.type = 'invalid';
+            const parts = effectiveLine.split('=');
+            if (parts.length >= 2) {
+                const key = parts[0].trim();
+                const expression = parts.slice(1).join('=').trim();
+                if (key && expression) {
+                    parsedAssignments[key] = expression;
+                } else if (key && !expression) {
+                    delete parsedAssignments[key];
                 }
             }
-            lineStructure.push(lineObj);
+            // キーなしexpressionのパースはここでは行わない
         });
     }
     
@@ -221,55 +208,66 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateRatioDisplay() {
         if (!ratioDisplayTextArea || !assignmentTextArea) return;
+        const assignmentLines = assignmentTextArea.value.split('\n');
         const displayLines = [];
-        lineStructure.forEach(lineObj => {
-            if (lineObj.type === 'assignment' || lineObj.type === 'expression') {
-                const keyToEval = lineObj.key; 
-                if (keyToEval && parsedAssignments[keyToEval]) { 
-                    const ratio = evaluateKeyFrequency(keyToEval, new Set());
+
+        assignmentLines.forEach(line => {
+            const originalLine = line; // 表示用に元の行を保持
+            line = line.trim();
+            
+            let effectiveLine = line;
+            const commentIndex = effectiveLine.indexOf('#');
+            if (commentIndex !== -1) {
+                effectiveLine = effectiveLine.substring(0, commentIndex).trim();
+            }
+
+            if (effectiveLine === '') { // コメントのみ、または空行
+                // displayLines.push(originalLine); // 元の行をそのまま表示する場合
+                return; 
+            }
+            
+            const parts = effectiveLine.split('=');
+            if (parts.length >= 2) {
+                const key = parts[0].trim();
+                if (key && parsedAssignments[key]) { 
+                    const ratio = evaluateKeyFrequency(key, new Set());
                     if (ratio !== null && !isNaN(ratio) && isFinite(ratio)) {
-                        const keyPrefix = lineObj.type === 'assignment' ? `${lineObj.key} = ` : "";
-                        displayLines.push(`${keyPrefix}${ratio.toFixed(5)}`);
+                        displayLines.push(`${key} = ${ratio.toFixed(5)}`);
                     } else {
-                        displayLines.push(lineObj.type === 'assignment' ? `${lineObj.key} = (エラー)` : `(エラー)`);
+                        displayLines.push(`${key} = (エラーまたは未定義)`);
                     }
-                } else if (lineObj.key) { 
-                     displayLines.push(lineObj.type === 'assignment' ? `${lineObj.key} = (未定義)` : `(未定義)`);
-                } else if (lineObj.type === 'expression' && lineObj.expression) { 
-                    displayLines.push(`${lineObj.expression} (解析エラー)`);
-                } else { 
-                    displayLines.push(lineObj.originalLine + " (不明な状態)");
+                } else if (key) { 
+                    displayLines.push(`${key} = (未定義)`);
+                } else { // key が空だが = がある場合など
+                    displayLines.push(originalLine + " (無効)");
                 }
-            } else {
-                displayLines.push(lineObj.originalLine); 
+            } else if (effectiveLine !== '') { 
+                 displayLines.push(effectiveLine + " (無効:キー指定なし)");
             }
         });
         ratioDisplayTextArea.value = displayLines.join('\n');
     }
 
     function updateDisabledKeysStatusAndRatioDisplay() {
-        keysLayout.flat().forEach(keyChar => { // Iterate over all physical keys defined in keysLayout
-            if (keyElements[keyChar]) { // If there's a DOM element for this physical key
-                // Check if this physical key is defined in parsedAssignments 
-                // (it won't be if it's an _anon_ key, but we are iterating physical keys here)
+        keysLayout.flat().forEach(keyChar => { 
+            if (keyElements[keyChar]) {
                 if (parsedAssignments.hasOwnProperty(keyChar)) {
-                    const freq = getFrequency(keyChar); // Evaluate its frequency
+                    const freq = getFrequency(keyChar); 
                     if (freq === null || isNaN(freq) || !isFinite(freq) || freq <= 0) {
-                        keyElements[keyChar].classList.add('disabled'); // Invalid or erroneous
+                        keyElements[keyChar].classList.add('disabled');
                     } else {
-                        keyElements[keyChar].classList.remove('disabled'); // Valid
+                        keyElements[keyChar].classList.remove('disabled');
                     }
                 } else {
-                    // Physical key is not defined in assignments, so it's disabled
                     keyElements[keyChar].classList.add('disabled');
                 }
             }
         });
-        updateRatioDisplay(); // Update the ratio display textarea
+        updateRatioDisplay();
     }
 
     function evaluateKeyFrequency(key, visitedKeys = new Set(), assignmentsToUse = parsedAssignments) {
-        if (evaluatedAssignments[key] !== undefined && assignmentsToUse === parsedAssignments) { 
+        if (evaluatedAssignments[key] !== undefined && assignmentsToUse === parsedAssignments) {
             return evaluatedAssignments[key];
         }
         if (visitedKeys.has(key)) {
@@ -323,7 +321,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function playNote(key) {
-        if (key.startsWith('_anon_')) return; 
         if (activeNotes[key]) return;
         const freq = getFrequency(key);
         if (freq === null || freq <= 0 || isNaN(freq) || !isFinite(freq)) {
@@ -357,7 +354,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function stopNote(key) {
-        if (key.startsWith('_anon_')) return;
         const noteInfo = activeNotes[key];
         if (noteInfo) {
             if (noteInfo.type === 'sine' && noteInfo.oscillator && noteInfo.gainNode) {
@@ -527,77 +523,77 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (sortAssignmentsButton && assignmentTextArea) {
         sortAssignmentsButton.addEventListener('click', () => {
-            const lineObjects = []; 
+            const currentParsed = { ...parsedAssignments }; 
+            const evaluableAssignments = []; 
             const currentLines = assignmentTextArea.value.split('\n');
-            const tempParsedForSort = {}; // ソート処理専用の一時的なパース結果
-
-            // 1. テキストエリアの全行をパースし、一時的な parsedAssignments (tempParsedForSort) と lineObjects を構築
-            currentLines.forEach((line, index) => {
-                const trimmedLine = line.trim();
-                let lineObj = { originalLine: line, type: 'invalid', key: null, expression: null, isAnonymous: false, error: false };
-
-                if (trimmedLine === '') {
-                    lineObj.type = 'empty';
-                } else if (trimmedLine.startsWith('#')) {
-                    lineObj.type = 'comment';
-                } else {
-                    const parts = trimmedLine.split('=');
-                    let key, expression;
-                    if (parts.length >= 2) {
-                        key = parts[0].trim();
-                        expression = parts.slice(1).join('=').trim();
-                        lineObj.isAnonymous = false;
-                    } else if (parts.length === 1 && trimmedLine !== '') {
-                        key = `_anon_${index}_`;
-                        expression = trimmedLine;
-                        lineObj.isAnonymous = true;
-                    }
-                    
-                    if (key && expression) {
-                        lineObj.key = key;
-                        lineObj.expression = expression;
-                        tempParsedForSort[key] = expression; // 一時的なパース結果に格納
-                        // この時点では ratio は未評価
-                        lineObj.type = lineObj.isAnonymous ? 'expression' : 'assignment';
-                    }
-                }
-                lineObjects.push(lineObj);
-            });
+            const originalKeyOrder = []; 
             
-            // 2. lineObjects のうち評価対象のものを抽出し、比率を計算 (assignmentsToUse として tempParsedForSort を使う)
-            lineObjects.forEach(lineObj => {
-                if ((lineObj.type === 'assignment' || lineObj.type === 'expression') && lineObj.key && lineObj.expression) {
-                    const ratio = evaluateKeyFrequency(lineObj.key, new Set(), tempParsedForSort);
-                    if (ratio !== null && isFinite(ratio)) {
-                        lineObj.ratio = ratio;
-                    } else {
-                        lineObj.error = true;
+            currentLines.forEach(line => {
+                let effectiveLine = line.trim();
+                const commentIndex = effectiveLine.indexOf('#');
+                if (commentIndex !== -1) effectiveLine = effectiveLine.substring(0, commentIndex).trim();
+                if (effectiveLine === '') return;
+
+                const parts = effectiveLine.split('=');
+                if (parts.length >= 2) {
+                    const key = parts[0].trim();
+                    const expression = parts.slice(1).join('=').trim();
+                    if (key && expression && currentParsed.hasOwnProperty(key) && currentParsed[key] === expression) {
+                        const ratio = evaluateKeyFrequency(key, new Set());
+                        if (ratio !== null && isFinite(ratio)) {
+                            evaluableAssignments.push({ key, expression, ratio });
+                            if (!originalKeyOrder.includes(key)) { 
+                                originalKeyOrder.push(key);
+                            }
+                        } else {
+                            console.warn(`Key '${key}' (expr: "${expression}") excluded from sort due to evaluation error.`);
+                        }
                     }
                 }
             });
-            
-            const evaluableAssignments = lineObjects.filter(lo => (lo.type === 'assignment' || lo.type === 'expression') && !lo.error);
+
             evaluableAssignments.sort((a, b) => a.ratio - b.ratio);
-            
-            const sortedExpressions = evaluableAssignments.map(item => item.expression);
-            
-            let sortedExprIdx = 0;
-            const resultLines = lineObjects.map(lineObj => {
-                if ((lineObj.type === 'assignment' || lineObj.type === 'expression') && !lineObj.error) {
-                    if (sortedExprIdx < sortedExpressions.length) {
-                        const newExpr = sortedExpressions[sortedExprIdx++];
-                        return lineObj.isAnonymous ? newExpr : `${lineObj.key} = ${newExpr}`;
-                    } else { 
-                        return lineObj.originalLine; // Should not happen if logic is correct
-                    }
+
+            const newAssignmentsMap = {};
+            for (let i = 0; i < evaluableAssignments.length; i++) {
+                if (i < originalKeyOrder.length) {
+                    const targetKey = originalKeyOrder[i]; 
+                    newAssignmentsMap[targetKey] = evaluableAssignments[i].expression; 
                 }
-                return lineObj.originalLine; 
+            }
+            
+            const resultLines = [];
+            currentLines.forEach(line => {
+                const originalLineContent = line; // コメント等を含む元の行
+                let effectiveLine = line.trim();
+                const commentIndex = effectiveLine.indexOf('#');
+                let commentSuffix = "";
+                if (commentIndex !== -1) {
+                    commentSuffix = " " + effectiveLine.substring(commentIndex); // # を含むコメント部分
+                    effectiveLine = effectiveLine.substring(0, commentIndex).trim();
+                }
+
+                if (effectiveLine === '') { // コメントのみ、または空行
+                    resultLines.push(originalLineContent); 
+                    return;
+                }
+                const parts = effectiveLine.split('=');
+                if (parts.length >= 2) {
+                    const key = parts[0].trim();
+                    if (newAssignmentsMap.hasOwnProperty(key)) {
+                        resultLines.push(`${key} = ${newAssignmentsMap[key]}${commentSuffix}`);
+                    } else {
+                        resultLines.push(originalLineContent); 
+                    }
+                } else {
+                    resultLines.push(originalLineContent); 
+                }
             });
 
             assignmentTextArea.value = resultLines.join('\n');
             localStorage.setItem(LS_KEYS.ASSIGNMENTS, assignmentTextArea.value);
-            updateAssignmentsFromTextArea(); // グローバルの parsedAssignments を更新
-            updateDisabledKeysStatusAndRatioDisplay();
+            updateAssignmentsFromTextArea(); 
+            updateDisabledKeysStatusAndRatioDisplay(); 
         });
     }
 
@@ -613,49 +609,66 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
+            const currentParsed = { ...parsedAssignments }; 
             const newLines = [];
-            // lineStructure は updateAssignmentsFromTextArea で更新されるので、それを参照
-            lineStructure.forEach(lineObj => {
-                if (lineObj.type === 'assignment' || lineObj.type === 'expression') {
-                    const key = lineObj.key; 
-                    const originalExpression = lineObj.expression;
+            const originalLines = assignmentTextArea.value.split('\n');
 
-                    if (key && originalExpression) {
-                        // ラッピング時も、その行の現在の式で評価する
-                        // evaluateKeyFrequency はグローバルの parsedAssignments を参照するので、
-                        // 一時的なコンテキストは不要（updateAssignmentsFromTextArea が既に実行されている前提）
-                        const ratio = evaluateKeyFrequency(key, new Set()); // assignmentsToUse はデフォルト(parsedAssignments)
+            originalLines.forEach(line => {
+                const originalLineContent = line;
+                let effectiveLine = line.trim();
+                const commentIndex = effectiveLine.indexOf('#');
+                let commentSuffix = "";
+                if (commentIndex !== -1) {
+                    commentSuffix = " " + effectiveLine.substring(commentIndex);
+                    effectiveLine = effectiveLine.substring(0, commentIndex).trim();
+                }
+                
+                if (effectiveLine === '') {
+                    newLines.push(originalLineContent); 
+                    return;
+                }
+                
+                const parts = effectiveLine.split('=');
+                if (parts.length >= 2) {
+                    const key = parts[0].trim();
+                    const originalExpression = parts.slice(1).join('=').trim(); 
+
+                    if (key && originalExpression && currentParsed.hasOwnProperty(key) && currentParsed[key] === originalExpression) {
+                        const ratio = evaluateKeyFrequency(key, new Set());
 
                         if (ratio !== null && isFinite(ratio) && ratio > 0) {
                             let k = 0;
                             let tempRatio = ratio;
-                            if (w > 1) {
+                            if (w > 1) { 
                                 while (tempRatio >= w) { tempRatio /= w; k++; }
                                 while (tempRatio < 1 && tempRatio > 0) { 
                                     tempRatio *= w; k--;
-                                    if (tempRatio < 1e-9 && k < -100 ) { tempRatio = 1; break; } 
+                                    if (tempRatio < 1e-9 && k < -100) { tempRatio = 1; break; } 
                                 }
                             }
-                            let newWrappedExpression = originalExpression;
-                            if (k > 0) newWrappedExpression = `(${originalExpression}) / (${w}^${k})`;
-                            else if (k < 0) newWrappedExpression = `(${originalExpression}) * (${w}^${-k})`;
                             
-                            newLines.push(lineObj.isAnonymous ? newWrappedExpression : `${key} = ${newWrappedExpression}`);
+                            let newExpression = originalExpression;
+                            if (k > 0) {
+                                newExpression = `(${originalExpression}) / (${w}^${k})`;
+                            } else if (k < 0) {
+                                newExpression = `(${originalExpression}) * (${w}^${-k})`;
+                            }
+                            newLines.push(`${key} = ${newExpression}${commentSuffix}`);
                         } else {
-                            newLines.push(lineObj.originalLine); 
+                            newLines.push(originalLineContent); 
                         }
                     } else {
-                        newLines.push(lineObj.originalLine); 
+                        newLines.push(originalLineContent); 
                     }
                 } else {
-                    newLines.push(lineObj.originalLine); 
+                    newLines.push(originalLineContent); 
                 }
             });
             
             assignmentTextArea.value = newLines.join('\n');
             localStorage.setItem(LS_KEYS.ASSIGNMENTS, assignmentTextArea.value);
-            updateAssignmentsFromTextArea();
-            updateDisabledKeysStatusAndRatioDisplay();
+            updateAssignmentsFromTextArea(); 
+            updateDisabledKeysStatusAndRatioDisplay(); 
         });
     }
 });
