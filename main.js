@@ -248,17 +248,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateDisabledKeysStatusAndRatioDisplay() {
-        Object.keys(parsedAssignments).forEach(keyChar => {
-            if (keyElements[keyChar] && !keyChar.startsWith('_anon_')) { 
-                const freq = getFrequency(keyChar); 
-                if (freq === null || isNaN(freq) || !isFinite(freq) || freq <= 0) {
-                    keyElements[keyChar].classList.add('disabled');
+        keysLayout.flat().forEach(keyChar => { // Iterate over all physical keys defined in keysLayout
+            if (keyElements[keyChar]) { // If there's a DOM element for this physical key
+                // Check if this physical key is defined in parsedAssignments 
+                // (it won't be if it's an _anon_ key, but we are iterating physical keys here)
+                if (parsedAssignments.hasOwnProperty(keyChar)) {
+                    const freq = getFrequency(keyChar); // Evaluate its frequency
+                    if (freq === null || isNaN(freq) || !isFinite(freq) || freq <= 0) {
+                        keyElements[keyChar].classList.add('disabled'); // Invalid or erroneous
+                    } else {
+                        keyElements[keyChar].classList.remove('disabled'); // Valid
+                    }
                 } else {
-                    keyElements[keyChar].classList.remove('disabled');
+                    // Physical key is not defined in assignments, so it's disabled
+                    keyElements[keyChar].classList.add('disabled');
                 }
             }
         });
-        updateRatioDisplay();
+        updateRatioDisplay(); // Update the ratio display textarea
     }
 
     function evaluateKeyFrequency(key, visitedKeys = new Set(), assignmentsToUse = parsedAssignments) {
