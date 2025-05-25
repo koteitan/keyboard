@@ -16,7 +16,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const masterVolumeSlider = document.getElementById('master-volume');
     const volumeDisplaySpan = document.getElementById('volume-display');
     const ratioDisplayTextArea = document.getElementById('ratio-display-textarea');
-    const sortAssignmentsButton = document.getElementById('sort-assignments-button');
+    const sortAssignmentsButton = document.getElementById('sort-assignments-button'); 
+    const wrappingButton = document.getElementById('wrapping-button');
+    const wrappingUnitInput = document.getElementById('wrapping-unit');
 
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const activeNotes = {}; 
@@ -168,6 +170,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (key && expression) parsedAssignments[key] = expression;
                 else if (key && !expression) delete parsedAssignments[key];
             }
+            // キーなしexpressionのパースはここでは行わない (ユーザー指示により後で)
         });
     }
     
@@ -193,30 +196,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateRatioDisplay() {
         if (!ratioDisplayTextArea || !assignmentTextArea) return;
-        const assignmentContent = assignmentTextArea.value; // 現在のテキストエリアの内容を取得
+        const assignmentContent = assignmentTextArea.value;
         const assignmentLines = assignmentContent.split('\n');
         const displayLines = [];
 
         assignmentLines.forEach(line => {
             line = line.trim();
             if (line === '' || line.startsWith('#')) {
-                // displayLines.push(line); // コメントや空行も表示する場合はこの行を生かす
                 return; 
             }
             const parts = line.split('=');
             if (parts.length >= 2) {
                 const key = parts[0].trim();
-                if (key && parsedAssignments[key]) { // parsedAssignmentsにキーが存在する場合のみ評価
+                if (key && parsedAssignments[key]) {
                     const ratio = evaluateKeyFrequency(key, new Set());
                     if (ratio !== null && !isNaN(ratio) && isFinite(ratio)) {
                         displayLines.push(`${key} = ${ratio.toFixed(5)}`);
                     } else {
                         displayLines.push(`${key} = (エラーまたは未定義)`);
                     }
-                } else if (key) { // キーはあるが式がない、またはparsedAssignmentsにない場合
+                } else if (key) {
                     displayLines.push(`${key} = (未定義)`);
                 }
-            } else if (line !== '') { // '=' がないが空でもない行
+            } else if (line !== '') {
                  displayLines.push(line + " (無効な行)");
             }
         });
@@ -483,12 +485,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (sortAssignmentsButton && assignmentTextArea) {
         sortAssignmentsButton.addEventListener('click', () => {
-            const currentParsed = { ...parsedAssignments }; // 現在のパース済みアサインメント
-            const evaluableAssignments = []; // { key, expression, ratio } を格納
-
-            // 1. 現在の音程マップから評価可能なアサインを抽出し、比率を計算
+            const currentParsed = { ...parsedAssignments }; 
+            const evaluableAssignments = []; 
             const currentLines = assignmentTextArea.value.split('\n');
-            const originalKeyOrder = []; // テキストエリアの行順の有効なキー
+            const originalKeyOrder = []; 
             
             currentLines.forEach(line => {
                 const trimmedLine = line.trim();
@@ -498,11 +498,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     const key = parts[0].trim();
                     const expression = parts.slice(1).join('=').trim();
                     if (key && expression && currentParsed.hasOwnProperty(key) && currentParsed[key] === expression) {
-                        // evaluateKeyFrequency はキャッシュを利用しつつ比率を返す
                         const ratio = evaluateKeyFrequency(key, new Set());
                         if (ratio !== null && isFinite(ratio)) {
                             evaluableAssignments.push({ key, expression, ratio });
-                            if (!originalKeyOrder.includes(key)) { // 重複を避けて元の順序を保持
+                            if (!originalKeyOrder.includes(key)) { 
                                 originalKeyOrder.push(key);
                             }
                         } else {
@@ -512,16 +511,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            // 2. 評価できたアサインを比率で昇順ソート (式の内容を保持)
             evaluableAssignments.sort((a, b) => a.ratio - b.ratio);
 
-            // 3. 新しいテキストエリアの内容を構築
-            //    元の行の順序 (originalKeyOrder) に従って、ソートされた「式」を割り当てる
             const newAssignmentsMap = {};
             for (let i = 0; i < evaluableAssignments.length; i++) {
                 if (i < originalKeyOrder.length) {
-                    const targetKey = originalKeyOrder[i]; // 元のi番目のキー
-                    newAssignmentsMap[targetKey] = evaluableAssignments[i].expression; // そのキーに、ソートされたi番目の式を割り当てる
+                    const targetKey = originalKeyOrder[i]; 
+                    newAssignmentsMap[targetKey] = evaluableAssignments[i].expression; 
                 }
             }
             
@@ -529,7 +525,7 @@ document.addEventListener('DOMContentLoaded', () => {
             currentLines.forEach(line => {
                 const trimmedLine = line.trim();
                 if (trimmedLine === '' || trimmedLine.startsWith('#')) {
-                    resultLines.push(line); // コメントや空行はそのまま
+                    resultLines.push(line); 
                     return;
                 }
                 const parts = trimmedLine.split('=');
@@ -538,19 +534,85 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (newAssignmentsMap.hasOwnProperty(key)) {
                         resultLines.push(`${key} = ${newAssignmentsMap[key]}`);
                     } else {
-                        resultLines.push(line); // ソート対象外だった行はそのまま
+                        resultLines.push(line); 
                     }
                 } else {
-                    resultLines.push(line); // 無効な行もそのまま
+                    resultLines.push(line); 
                 }
             });
 
             assignmentTextArea.value = resultLines.join('\n');
-            
-            // 更新を反映
             localStorage.setItem(LS_KEYS.ASSIGNMENTS, assignmentTextArea.value);
-            updateAssignmentsFromTextArea(); // parsedAssignments を更新
-            updateDisabledKeysStatusAndRatioDisplay(); // 表示を更新
+            updateAssignmentsFromTextArea(); 
+            updateDisabledKeysStatusAndRatioDisplay(); 
+        });
+    }
+
+    if (wrappingButton && assignmentTextArea && wrappingUnitInput) {
+        wrappingButton.addEventListener('click', () => {
+            const w = parseFloat(wrappingUnitInput.value);
+            if (isNaN(w) || w <= 0) {
+                alert("ラッピング単位は正の数を入力してください。");
+                return;
+            }
+            if (w === 1) {
+                alert("ラッピング単位として1は使用できません（全ての比率が1になってしまいます）。");
+                return;
+            }
+
+            const currentParsed = { ...parsedAssignments }; 
+            const newLines = [];
+            const originalLines = assignmentTextArea.value.split('\n');
+
+            originalLines.forEach(line => {
+                const trimmedLine = line.trim();
+                if (trimmedLine === '' || trimmedLine.startsWith('#')) {
+                    newLines.push(line); 
+                    return;
+                }
+                
+                const parts = trimmedLine.split('=');
+                if (parts.length >= 2) {
+                    const key = parts[0].trim();
+                    const originalExpression = parts.slice(1).join('=').trim(); 
+
+                    if (key && originalExpression && currentParsed.hasOwnProperty(key) && currentParsed[key] === originalExpression) {
+                        const ratio = evaluateKeyFrequency(key, new Set());
+
+                        if (ratio !== null && isFinite(ratio) && ratio > 0) {
+                            let k = 0;
+                            let tempRatio = ratio;
+                            if (w > 1) { 
+                                while (tempRatio >= w) { tempRatio /= w; k++; }
+                                while (tempRatio < 1 && tempRatio > 0) { 
+                                    tempRatio *= w; k--;
+                                    if (tempRatio < 1e-9 && k < -100) { tempRatio = 1; break; } 
+                                }
+                            }
+                            
+                            let newExpression = originalExpression;
+                            if (k > 0) {
+                                newExpression = `(${originalExpression}) / (${w}^${k})`;
+                            } else if (k < 0) {
+                                newExpression = `(${originalExpression}) * (${w}^${-k})`;
+                            }
+                            newLines.push(`${key} = ${newExpression}`);
+                        } else {
+                            newLines.push(line); 
+                        }
+                    } else {
+                        newLines.push(line); 
+                    }
+                } else {
+                    // キーなしexpressionはここでは処理しない (ユーザー指示により後で)
+                    newLines.push(line); 
+                }
+            });
+            
+            assignmentTextArea.value = newLines.join('\n');
+            localStorage.setItem(LS_KEYS.ASSIGNMENTS, assignmentTextArea.value);
+            updateAssignmentsFromTextArea(); 
+            updateDisabledKeysStatusAndRatioDisplay(); 
         });
     }
 });
